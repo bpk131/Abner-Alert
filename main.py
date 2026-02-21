@@ -10,7 +10,7 @@ TEAM_ID = 109                # Arizona Diamondbacks
 TWILIO_SID = os.environ["TWILIO_SID"]
 TWILIO_AUTH = os.environ["TWILIO_AUTH"]
 TWILIO_FROM = os.environ["TWILIO_FROM"]
-TWILIO_TO = os.environ["TWILIO_TO"]
+TWILIO_TO = os.environ["TWILIO_TO"].split(",")
 
 STATE_PATH = "state.json"
 
@@ -40,9 +40,15 @@ def abner_is_pitching_now(live):
     pid = defense.get("pitcher", {}).get("id")
     return pid == PITCHER_ID
 
+
 def send_text(game_pk):
     body = f"🚨 Philip Abner just entered the game for ARI. (gamePk: {game_pk})"
-    client.messages.create(body=body, from_=TWILIO_FROM, to=TWILIO_TO)
+    for number in TWILIO_TO:
+        client.messages.create(
+            body=body,
+            from_=TWILIO_FROM,
+            to=number.strip()
+        )
 
 def main():
     state = load_state()
