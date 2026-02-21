@@ -2,7 +2,7 @@ name: Abner Alert
 
 on:
   schedule:
-    - cron: "*/2 * * * *"   # every 2 minutes (GitHub schedules can drift a bit)
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
