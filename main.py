@@ -1,22 +1,30 @@
 import os
-import time
+import json
 import requests
 from datetime import datetime
 from twilio.rest import Client
 
-# ---- CONFIG ----
 PITCHER_ID = 691769          # Philip Abner
 TEAM_ID = 109                # Arizona Diamondbacks
-POLL_SECONDS = int(os.getenv("POLL_SECONDS", "30"))
 
 TWILIO_SID = os.environ["TWILIO_SID"]
 TWILIO_AUTH = os.environ["TWILIO_AUTH"]
 TWILIO_FROM = os.environ["TWILIO_FROM"]
 TWILIO_TO = os.environ["TWILIO_TO"]
 
+STATE_PATH = "state.json"
+
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
-alerted_game_pks = set()
+def load_state():
+    if os.path.exists(STATE_PATH):
+        with open(STATE_PATH, "r") as f:
+            return json.load(f)
+    return {"alerted_game_pks": []}
+
+def save_state(state):
+    with open(STATE_PATH, "w") as f:
+        json.dump(state, f)
 
 def todays_game_pks():
     today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -32,21 +40,27 @@ def abner_is_pitching_now(live):
     pid = defense.get("pitcher", {}).get("id")
     return pid == PITCHER_ID
 
-def text(game_pk):
+def send_text(game_pk):
     body = f"🚨 Philip Abner just entered the game for ARI. (gamePk: {game_pk})"
     client.messages.create(body=body, from_=TWILIO_FROM, to=TWILIO_TO)
 
-while True:
-    try:
-        for game_pk in todays_game_pks():
-            if game_pk in alerted_game_pks:
-                continue
-            live_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
-            live = requests.get(live_url, timeout=15).json()
-            if abner_is_pitching_now(live):
-                text(game_pk)
-                alerted_game_pks.add(game_pk)
-    except Exception as e:
-        print("Error:", e)
+def main():
+    state = load_state()
+    alerted = set(state.get("alerted_game_pks", []))
 
-    time.sleep(POLL_SECONDS)
+    for game_pk in todays_game_pks():
+        if game_pk in alerted:
+            continue
+
+        live_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
+        live = requests.get(live_url, timeout=15).json()
+
+        if abner_is_pitching_now(live):
+            send_text(game_pk)
+            alerted.add(game_pk)
+
+    state["alerted_game_pks"] = sorted(list(alerted))
+    save_state(state)
+
+if __name__ == "__main__":
+    main()
