@@ -2,8 +2,13 @@ name: Abner Alert
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch: {}
+    - cron: "*/5 * * * *"   # GitHub schedules are best-effort; 5 min is the minimum supported
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send a test SMS now (true/false)"
+        required: true
+        default: "false"
 
 permissions:
   contents: write
@@ -32,6 +37,8 @@ jobs:
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
           TWILIO_TO: ${{ secrets.TWILIO_TO }}
+          TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test == 'true' && '1' || '0' }}
+          TEST_MESSAGE: "🚨 TEST: Abner alert bot is working."
         run: python main.py
 
       - name: Commit updated state (if changed)
