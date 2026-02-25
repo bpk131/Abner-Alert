@@ -4,59 +4,81 @@ import json
 import statsapi
 from twilio.rest import Client
 
-TEAM_ID = 109  # Arizona Diamondbacks
+# Target: Philip Abner (LHP, Arizona Diamondbacks)
+TEAM_ID = 109 
 PLAYER_NAME = "Philip Abner"
 STATE_FILE = 'state.json'
 
 def send_sms(message):
-    client = Client(os.environ['TWILIO_SID'], os.environ['TWILIO_AUTH'])
-    client.messages.create(
-        body=message,
-        from_=os.environ['TWILIO_FROM'],
-        to=os.environ['TWILIO_TO']
-    )
+    """Sends SMS to multiple numbers from the TWILIO_TO secret."""
+    try:
+        client = Client(os.environ['TWILIO_SID'], os.environ['TWILIO_AUTH'])
+        
+        # Splits "+1814..., +1704..." into a list of individual numbers
+        to_numbers = os.environ['TWILIO_TO'].split(',')
+        
+        for number in to_numbers:
+            clean_number = number.strip()
+            if clean_number:
+                client.messages.create(
+                    body=message,
+                    from_=os.environ['TWILIO_FROM'],
+                    to=clean_number
+                )
+                print(f"✅ Message sent to {clean_number}")
+    except Exception as e:
+        print(f"❌ Twilio Error: {e}")
 
 def main():
-    # 1. Handle Manual Test
+    # 1. Handle Manual Test Mode
     if os.getenv('TEST_MODE') == '1':
-        send_sms("🚨 ABNER BOT: Online. Watching for Philip Abner.")
+        print("Running in TEST_MODE...")
+        test_msg = os.getenv('TEST_MESSAGE', "🚨 TEST: Abner alert bot is working.")
+        send_sms(test_msg)
         return
 
-    # 2. Load State
+    # 2. Load State (to prevent double-texting)
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r') as f:
             state = json.load(f)
     else:
         state = {"alerted_game_pks": []}
 
-    # 3. Check for Active Game
+    # 3. Check if a game is currently live
+    print("Checking MLB schedule for active D-backs games...")
     sched = statsapi.schedule(team=TEAM_ID)
-    active_game_id = next((g['game_id'] for g in sched if g['status'] == "In Progress"), None)
+    active_game = next((g for g in sched if g['status'] == "In Progress"), None)
 
-    if not active_game_id:
-        print("No active D-backs game. Shutting down.")
+    if not active_game:
+        print("No active Diamondbacks game found. Shutting down to save minutes.")
         return
 
-    # 4. Long-Loop (55 minutes)
-    print(f"Game {active_game_id} active. Starting 55-min watch...")
+    game_pk = active_game['game_id']
+    print(f"Game {game_pk} is live. Starting 55-minute internal watch...")
+
+    # 4. THE LONG LOOP (Checks every 60s for 55 minutes)
     for _ in range(55):
-        # If already alerted for this game, stop
-        if active_game_id in state['alerted_game_pks']:
+        # Stop if we already sent a text for this specific game
+        if game_pk in state['alerted_game_pks']:
+            print(f"Already alerted for Game {game_pk}. Ending loop.")
             break
 
         try:
-            # linescore is the fastest real-time source
-            line = statsapi.linescore(active_game_id)
-            if PLAYER_NAME in line:
-                send_sms(f"🚨 ABNER ALERT: Philip Abner is pitching now!")
-                state['alerted_game_pks'].append(active_game_id)
+            # Linescore is the fastest way to see the current pitcher
+            ls = statsapi.linescore(game_pk)
+            if PLAYER_NAME in ls:
+                send_sms(f"🚨 ABNER ALERT: Philip Abner is now pitching!")
+                
+                # Update state and save immediately
+                state['alerted_game_pks'].append(game_pk)
                 with open(STATE_FILE, 'w') as f:
                     json.dump(state, f)
-                break
+                
+                print(f"Abner detected. Alert sent for game {game_pk}.")
+                break # Exit after alerting
         except Exception as e:
-            print(f"API Error: {e}")
+            print(f"Error checking game data: {e}")
 
-        time.sleep(60)
+        time.sleep(60) # Wait 1 minute before checking again
 
-if __name__ == "__main__":
-    main()
+if __name__ ==
