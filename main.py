@@ -1,85 +1,75 @@
 import os
+import time
 import json
-import requests
-from datetime import datetime
+import statsapi
 from twilio.rest import Client
 
-PITCHER_ID = 691769          # Philip Abner
-TEAM_ID = 109                # Arizona Diamondbacks
+TEAM_ID = 109  # Arizona Diamondbacks
+PLAYER_NAME = "Philip Abner"
+STATE_FILE = 'state.json'
 
-TWILIO_SID = os.environ["TWILIO_SID"]
-TWILIO_AUTH = os.environ["TWILIO_AUTH"]
-TWILIO_FROM = os.environ["TWILIO_FROM"]
-TWILIO_TO = os.environ["TWILIO_TO"].split(",")
-
-STATE_PATH = "state.json"
-
-client = Client(TWILIO_SID, TWILIO_AUTH)
-
-TEST_MODE = os.getenv("TEST_MODE", "0") == "1"
-TEST_MESSAGE = os.getenv("TEST_MESSAGE", "🚨 TEST: Abner alert bot is working.")
-
-def load_state():
-    if os.path.exists(STATE_PATH):
-        with open(STATE_PATH, "r") as f:
-            return json.load(f)
-    return {"alerted_game_pks": []}
-
-def save_state(state):
-    with open(STATE_PATH, "w") as f:
-        json.dump(state, f)
-
-def todays_game_pks():
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId={TEAM_ID}&date={today}&gameTypes=R,S,P"
-    data = requests.get(url, timeout=15).json()
-    dates = data.get("dates", [])
-    if not dates:
-        return []
-    return [g.get("gamePk") for g in dates[0].get("games", []) if g.get("gamePk")]
-
-def abner_is_pitching_now(live):
-    defense = live.get("liveData", {}).get("linescore", {}).get("defense", {})
-    pid = defense.get("pitcher", {}).get("id")
-    return pid == PITCHER_ID
-
-
-def send_text(game_pk):
-    body = f"🚨 Philip Abner just entered the game for ARI. (gamePk: {game_pk})"
-    for number in TWILIO_TO:
-        client.messages.create(
-            body=body,
-            from_=TWILIO_FROM,
-            to=number.strip()
-        )
+def send_sms(message):
+    client = Client(os.environ['TWILIO_SID'], os.environ['TWILIO_AUTH'])
+    client.messages.create(
+        body=message,
+        from_=os.environ['TWILIO_FROM'],
+        to=os.environ['TWILIO_TO']
+    )
 
 def main():
-
-    if TEST_MODE:
-        for number in TWILIO_TO:
-            client.messages.create(
-                body=TEST_MESSAGE,
-                from_=TWILIO_FROM,
-                to=number.strip()
-            )
+    # 1. Handle Manual Test Mode from GitHub
+    if os.getenv('TEST_MODE') == '1':
+        send_sms("🚨 ABNER BOT: Test successful. I'm watching the mound.")
         return
-    
-    state = load_state()
-    alerted = set(state.get("alerted_game_pks", []))
 
-    for game_pk in todays_game_pks():
-        if game_pk in alerted:
-            continue
+    # 2. Load the list of games we've already alerted for
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r') as f:
+            state = json.load(f)
+    else:
+        state = {"alerted_game_pks": []}
 
-        live_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
-        live = requests.get(live_url, timeout=15).json()
+    # 3. Check if there is a game happening RIGHT NOW
+    # This prevents the script from looping 24/7 and wasting your minutes
+    sched = statsapi.schedule(team=TEAM_ID)
+    active_game = None
+    for game in sched:
+        if game['status'] == "In Progress":
+            active_game = game
+            break
 
-        if abner_is_pitching_now(live):
-            send_text(game_pk)
-            alerted.add(game_pk)
+    if not active_game:
+        print("No active D-backs game. Shutting down to save minutes.")
+        return
 
-    state["alerted_game_pks"] = sorted(list(alerted))
-    save_state(state)
+    # 4. If a game IS happening, stay awake for 55 minutes and check every 60s
+    game_pk = active_game['game_id']
+    print(f"Game {game_pk} is live. Starting 55-minute Abner watch...")
+
+    for _ in range(55):
+        # If we already alerted for this game, we can stop the whole script
+        if game_pk in state['alerted_game_pks']:
+            print("Already alerted for this game. Standing down.")
+            break
+
+        # Check the current pitcher
+        # 'linescore' is the most real-time data point in the MLB API
+        try:
+            ls = statsapi.linescore(game_pk)
+            if PLAYER_NAME in ls:
+                send_sms(f"🚨 ABNER ALERT: Philip Abner is in the game!")
+                
+                # Update state and save
+                state['alerted_game_pks'].append(game_pk)
+                with open(STATE_FILE, 'w') as f:
+                    json.dump(state, f)
+                
+                print("Abner detected! SMS sent and state saved.")
+                break # Exit loop after alerting
+        except Exception as e:
+            print(f"Error checking score: {e}")
+
+        time.sleep(60) # Wait 60 seconds before checking again
 
 if __name__ == "__main__":
     main()
