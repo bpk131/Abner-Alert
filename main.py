@@ -30,14 +30,14 @@ def send_sms(message):
         print(f"❌ Twilio Error: {e}")
 
 def main():
-    # 1. Handle Manual Test Mode
+    # 1. Handle Manual Test Mode from GitHub Actions
     if os.getenv('TEST_MODE') == '1':
         print("Running in TEST_MODE...")
         test_msg = os.getenv('TEST_MESSAGE', "🚨 TEST: Abner alert bot is working.")
         send_sms(test_msg)
         return
 
-    # 2. Load State (to prevent double-texting)
+    # 2. Load State (to prevent double-texting in the same game)
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r') as f:
             state = json.load(f)
@@ -75,10 +75,11 @@ def main():
                     json.dump(state, f)
                 
                 print(f"Abner detected. Alert sent for game {game_pk}.")
-                break # Exit after alerting
+                break 
         except Exception as e:
             print(f"Error checking game data: {e}")
 
-        time.sleep(60) # Wait 1 minute before checking again
+        time.sleep(60) 
 
-if __name__ ==
+if __name__ == "__main__":
+    main()
