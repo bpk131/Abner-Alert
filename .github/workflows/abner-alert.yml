@@ -2,7 +2,7 @@ name: Abner Alert
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # GitHub schedules are best-effort; 5 min is the minimum supported
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       test:
@@ -41,21 +41,20 @@ jobs:
           TEST_MESSAGE: "🚨 TEST: Abner alert bot is working."
         run: python main.py
 
-     - name: Commit updated state (if changed)
-  run: |
-    git config user.name "abner-alert-bot"
-    git config user.email "abner-alert-bot@users.noreply.github.com"
+      - name: Commit updated state (if changed)
+        run: |
+          git config user.name "abner-alert-bot"
+          git config user.email "abner-alert-bot@users.noreply.github.com"
 
-    # state.json may not exist (e.g., TEST_MODE exits early). Don't fail.
-    if [ -f state.json ]; then
-      git add state.json
-    else
-      echo "state.json not present; skipping git add."
-    fi
+          if [ -f state.json ]; then
+            git add state.json
+          else
+            echo "state.json not present; skipping git add."
+          fi
 
-    if git diff --cached --quiet; then
-      echo "No state changes to commit."
-    else
-      git commit -m "Update state"
-      git push
-    fi
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update state"
+            git push
+          fi
