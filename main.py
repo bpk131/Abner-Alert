@@ -16,6 +16,9 @@ STATE_PATH = "state.json"
 
 client = Client(TWILIO_SID, TWILIO_AUTH)
 
+TEST_MODE = os.getenv("TEST_MODE", "0") == "1"
+TEST_MESSAGE = os.getenv("TEST_MESSAGE", "🚨 TEST: Abner alert bot is working.")
+
 def load_state():
     if os.path.exists(STATE_PATH):
         with open(STATE_PATH, "r") as f:
@@ -51,6 +54,16 @@ def send_text(game_pk):
         )
 
 def main():
+
+    if TEST_MODE:
+        for number in TWILIO_TO:
+            client.messages.create(
+                body=TEST_MESSAGE,
+                from_=TWILIO_FROM,
+                to=number.strip()
+            )
+        return
+    
     state = load_state()
     alerted = set(state.get("alerted_game_pks", []))
 
