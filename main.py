@@ -54,10 +54,14 @@ def main():
         return
 
     game_pk = active_game['game_id']
-    print(f"Game {game_pk} is live. Starting 55-minute internal watch...")
+    # Updated text to reflect the new 65-minute window
+    print(f"Game {game_pk} is live. Starting 65-minute internal watch...")
 
-    # 4. THE LONG LOOP (Checks every 60s for 55 minutes)
-    for _ in range(55):
+    # 4. THE LONG LOOP (Checks every 60s for 65 minutes)
+    for i in range(65):  # Changed to 65 for the overlap!
+        # This print acts as a "heartbeat" so you can watch it live in GitHub Actions
+        print(f"Minute {i+1}/65: Checking boxscore for {PLAYER_NAME}...")
+
         # Stop if we already sent a text for this specific game
         if game_pk in state['alerted_game_pks']:
             print(f"Already alerted for Game {game_pk}. Ending loop.")
