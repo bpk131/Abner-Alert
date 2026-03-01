@@ -2,9 +2,10 @@ name: Abner Alert
 
 on:
   schedule:
-    # Runs every hour at minute 0, from 17:00 UTC (12PM EST) to 04:00 UTC (11PM EST)
-    # This covers the full window and saves your GitHub minutes overnight!
-    - cron: "0 17-23,0-4 * * *"  
+# Block 1: 12 PM to 6 PM EST (17:00 to 23:00 UTC)
+    - cron: "0 17-23 * * *"
+    # Block 2: 7 PM to 11 PM EST (00:00 to 04:00 UTC)
+    - cron: "0 0-4 * * *"
   workflow_dispatch:
     inputs:
       test:
