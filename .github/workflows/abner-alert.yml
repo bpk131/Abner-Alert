@@ -2,7 +2,9 @@ name: Abner Alert
 
 on:
   schedule:
-    - cron: "0 * * * *"  # This tells GitHub to start at the top of every hour
+    # Runs every hour at minute 0, from 17:00 UTC (12PM EST) to 04:00 UTC (11PM EST)
+    # This covers the full window and saves your GitHub minutes overnight!
+    - cron: "0 17-23,0-4 * * *"  
   workflow_dispatch:
     inputs:
       test:
@@ -16,8 +18,8 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    # This is important! We give it an hour to finish its work.
-    timeout-minutes: 65 
+    # Increased to 70 to give the 65-minute script room to finish and push its state
+    timeout-minutes: 70  
 
     steps:
       - name: Checkout repo
@@ -39,13 +41,14 @@ jobs:
           TWILIO_AUTH: ${{ secrets.TWILIO_AUTH }}
           TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
           TWILIO_TO: ${{ secrets.TWILIO_TO }}
+          PYTHONUNBUFFERED: "1" # This is the magic key for LIVE logs
           TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test == 'true' && '1' || '0' }}
-        run: python main.py
+        # Changed to python -u for unbuffered output
+        run: python -u main.py
 
       - name: Commit updated state (if changed)
         run: |
           git config user.name "abner-alert-bot"
           git config user.email "abner-alert-bot@users.noreply.github.com"
-          # Only commit if state.json actually changed (Abner entered the game)
           git add state.json
           git diff --cached --quiet || (git commit -m "Update state" && git push)
